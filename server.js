@@ -6,6 +6,7 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, "public");
+const ROOT_STATIC_FILES = new Set(["index.html", "app.js", "styles.css"]);
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -621,20 +622,49 @@ async function handleDownload(req, res) {
   }
 }
 
+async function readStaticFile(resolvedPath) {
+  const data = await fsp.readFile(resolvedPath);
+  const ext = path.extname(resolvedPath).toLowerCase();
+  return {
+    data,
+    contentType: MIME_TYPES[ext] || "application/octet-stream",
+  };
+}
+
 async function serveStatic(res, filePath) {
   try {
     const resolvedPath = path.normalize(filePath);
-    if (!resolvedPath.startsWith(PUBLIC_DIR)) {
+    const isPublicFile = resolvedPath.startsWith(PUBLIC_DIR);
+    const isRootFallbackFile =
+      path.dirname(resolvedPath) === __dirname &&
+      ROOT_STATIC_FILES.has(path.basename(resolvedPath));
+
+    if (!isPublicFile && !isRootFallbackFile) {
       return sendText(res, 403, "Forbidden");
     }
 
-    const data = await fsp.readFile(resolvedPath);
-    const ext = path.extname(resolvedPath).toLowerCase();
+    let staticFile;
+    try {
+      staticFile = await readStaticFile(resolvedPath);
+    } catch (error) {
+      const fallbackPath = path.join(__dirname, path.basename(resolvedPath));
+      const canFallbackToRoot =
+        isPublicFile && ROOT_STATIC_FILES.has(path.basename(resolvedPath));
+
+      if (!canFallbackToRoot) {
+        throw error;
+      }
+
+      staticFile = await readStaticFile(fallbackPath);
+    }
+
     res.writeHead(200, {
-      "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-      "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=300",
+      "Content-Type": staticFile.contentType,
+      "Cache-Control": staticFile.contentType.includes("text/html")
+        ? "no-store"
+        : "public, max-age=300",
     });
-    res.end(data);
+    res.end(staticFile.data);
   } catch {
     sendText(res, 404, "Not Found");
   }
@@ -652,9 +682,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET") {
+    const staticName = requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1);
     const requestedPath =
-      requestUrl.pathname === "/"
-        ? path.join(PUBLIC_DIR, "index.html")
+      requestUrl.pathname === "/" || ROOT_STATIC_FILES.has(staticName)
+        ? path.join(PUBLIC_DIR, staticName)
         : path.join(PUBLIC_DIR, requestUrl.pathname);
     return serveStatic(res, requestedPath);
   }
