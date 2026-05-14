@@ -1,0 +1,13 @@
+{
+  "name": "sports-image-batch-tool",
+  "version": "1.0.0",
+  "description": "Online tool for searching and batch downloading high-resolution sports portraits.",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
