@@ -1,34 +1,34 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>体育人物高清批量下图工具</title>
+    <title>Getty Sports Image Finder</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="page-shell">
       <header class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Sports Image Picker</p>
-          <h1>体育人物高清批量下图工具</h1>
+          <p class="eyebrow">Getty Images Focus</p>
+          <h1>Getty Sports Image Finder</h1>
           <p class="hero-text">
-            输入中文人名、人物描述或球队名，系统会自动去公共图片库里找高清人物图，帮你筛到 2K
-            以上，再一键打包下载。
+            Search Getty Images editorial sports photos by player, team, and sport. The default minimum long edge is now
+            1080px.
           </p>
         </div>
         <div class="hero-card">
           <div class="hero-stat">
-            <span>默认筛选</span>
-            <strong>2K+</strong>
+            <span>Source</span>
+            <strong>Getty Images</strong>
           </div>
           <div class="hero-stat">
-            <span>适用场景</span>
-            <strong>足球 / 篮球 / 棒球</strong>
+            <span>Minimum Size</span>
+            <strong>1080px+</strong>
           </div>
           <div class="hero-stat">
-            <span>增强识别</span>
-            <strong id="analysis-text">等待初始化...</strong>
+            <span>Analysis</span>
+            <strong id="analysis-text">Waiting...</strong>
           </div>
         </div>
       </header>
@@ -37,58 +37,53 @@
         <section class="panel search-panel">
           <form id="search-form" class="search-form">
             <label>
-              <span>人物名称或描述</span>
+              <span>Player or description</span>
               <input
                 id="query"
                 name="query"
                 type="text"
-                placeholder="例如：梅西、阿根廷前锋、湖人后卫"
+                placeholder="Example: Lionel Messi, LeBron James, Shohei Ohtani"
                 required
               />
             </label>
 
             <label>
-              <span>球队名</span>
-              <input
-                id="team"
-                name="team"
-                type="text"
-                placeholder="例如：迈阿密国际、洛杉矶湖人、纽约扬基"
-              />
+              <span>Team</span>
+              <input id="team" name="team" type="text" placeholder="Example: Inter Miami, Lakers, Yankees" />
             </label>
 
             <label>
-              <span>运动类型</span>
+              <span>Sport</span>
               <select id="sport" name="sport">
-                <option value="any">不限</option>
-                <option value="football">足球</option>
-                <option value="basketball">篮球</option>
-                <option value="baseball">棒球</option>
+                <option value="any">Any</option>
+                <option value="football">Football / Soccer</option>
+                <option value="basketball">Basketball</option>
+                <option value="baseball">Baseball</option>
               </select>
             </label>
 
             <label>
-              <span>最小长边</span>
+              <span>Minimum long edge</span>
               <select id="minLongEdge" name="minLongEdge">
-                <option value="2048">2K 及以上</option>
-                <option value="2560">2.5K 及以上</option>
-                <option value="3000">3K 及以上</option>
-                <option value="3840">4K 及以上</option>
+                <option value="1080">1080px+</option>
+                <option value="1600">1600px+</option>
+                <option value="2048">2K+</option>
+                <option value="3000">3K+</option>
               </select>
             </label>
 
             <label>
-              <span>返回数量</span>
+              <span>Result count</span>
               <select id="limit" name="limit">
-                <option value="24">24 张</option>
-                <option value="36">36 张</option>
-                <option value="48">48 张</option>
-                <option value="60">60 张</option>
+                <option value="24">24</option>
+                <option value="36">36</option>
+                <option value="48">48</option>
+                <option value="60">60</option>
               </select>
             </label>
 
             <div class="search-actions">
-              <button type="submit" class="primary-btn">开始查找</button>
+              <button type="submit" class="primary-btn">Search Getty</button>
             </div>
           </form>
         </section>
@@ -96,56 +91,56 @@
         <section class="panel toolbar-panel">
           <div class="toolbar">
             <div class="toolbar-block">
-              <span class="toolbar-label">继续筛选</span>
-              <input id="filter-keyword" type="text" placeholder="按标题或来源筛选当前结果" />
+              <span class="toolbar-label">Filter</span>
+              <input id="filter-keyword" type="text" placeholder="Filter by title, place, or caption" />
             </div>
             <div class="toolbar-block">
-              <span class="toolbar-label">方向</span>
+              <span class="toolbar-label">Orientation</span>
               <select id="orientation-filter">
-                <option value="all">全部</option>
-                <option value="portrait">竖图优先</option>
-                <option value="landscape">横图优先</option>
-                <option value="square">接近方图</option>
+                <option value="all">All</option>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+                <option value="square">Square-ish</option>
               </select>
             </div>
             <div class="toolbar-block">
-              <span class="toolbar-label">人数</span>
+              <span class="toolbar-label">People</span>
               <select id="people-filter">
-                <option value="all">全部</option>
-                <option value="single">单人</option>
-                <option value="multi">多人</option>
-                <option value="unknown">未识别</option>
+                <option value="all">All</option>
+                <option value="single">Single</option>
+                <option value="multi">Multiple</option>
+                <option value="unknown">Unknown</option>
               </select>
             </div>
             <div class="toolbar-block">
-              <span class="toolbar-label">高级筛选</span>
+              <span class="toolbar-label">Shot type</span>
               <select id="scene-filter">
-                <option value="all">全部</option>
-                <option value="headshot">只看头像</option>
-                <option value="halfbody">只看半身</option>
-                <option value="action">只看比赛照</option>
-                <option value="other">其他</option>
+                <option value="all">All</option>
+                <option value="headshot">Headshot</option>
+                <option value="halfbody">Half body</option>
+                <option value="action">Match action</option>
+                <option value="other">Other</option>
               </select>
             </div>
             <div class="toolbar-block compact">
-              <button id="select-visible" type="button" class="ghost-btn">选中当前可见</button>
-              <button id="clear-selection" type="button" class="ghost-btn">清空选择</button>
+              <button id="select-visible" type="button" class="ghost-btn">Select visible</button>
+              <button id="clear-selection" type="button" class="ghost-btn">Clear</button>
             </div>
             <div class="toolbar-block compact">
-              <button id="download-selected" type="button" class="primary-btn">下载选中图片</button>
+              <button id="download-selected" type="button" class="primary-btn">Export selected</button>
             </div>
           </div>
           <div class="toolbar-summary">
-            <span id="status-text">还没有开始搜索。</span>
-            <span id="selection-text">已选 0 张</span>
+            <span id="status-text">No search yet.</span>
+            <span id="selection-text">Selected 0</span>
           </div>
         </section>
 
         <section class="panel results-panel">
           <div id="results-grid" class="results-grid empty">
             <div class="empty-state">
-              <h2>先搜一次，我们就开始筛图</h2>
-              <p>建议直接输入中文名，再加球队名，结果会更准。</p>
+              <h2>Search Getty Images</h2>
+              <p>Try English player and team names for the best accuracy.</p>
             </div>
           </div>
         </section>
@@ -156,7 +151,7 @@
       <article class="result-card">
         <label class="result-select">
           <input type="checkbox" class="select-checkbox" />
-          <span>加入下载</span>
+          <span>Add to export</span>
         </label>
         <a class="image-link" target="_blank" rel="noreferrer">
           <img class="result-image" alt="" loading="lazy" />
@@ -170,8 +165,8 @@
           <p class="result-meta analysis-meta"></p>
           <p class="result-meta license"></p>
           <div class="result-actions">
-            <a class="ghost-link detail-link" target="_blank" rel="noreferrer">查看原图页</a>
-            <button type="button" class="ghost-link copy-link-btn">复制原图链接</button>
+            <a class="ghost-link detail-link" target="_blank" rel="noreferrer">Open Getty page</a>
+            <button type="button" class="ghost-link copy-link-btn">Copy image link</button>
           </div>
         </div>
       </article>

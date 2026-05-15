@@ -20,42 +20,24 @@ const pendingAnalysisIds = new Set();
 
 const supportsFaceDetection = "FaceDetector" in window;
 const faceDetector = supportsFaceDetection
-  ? new window.FaceDetector({
-      fastMode: true,
-      maxDetectedFaces: 8,
-    })
+  ? new window.FaceDetector({ fastMode: true, maxDetectedFaces: 8 })
   : null;
 
 const MULTI_PERSON_KEYWORDS = [
   " team",
   "squad",
   "group",
-  "groups",
   "celebration",
   "huddle",
   "lineup",
   "bench",
-  "together",
-  "duo",
-  "trio",
-  "pair",
   "players",
   "teammates",
   "with ",
   " and ",
   " vs ",
-  " v ",
-  "群像",
-  "合影",
-  "集体",
-  "多人",
-  "全队",
-  "球队",
-  "队员",
-  "球员们",
-  "一起",
-  "合照",
-  "双人",
+  "group portrait",
+  "team photo",
 ];
 
 const SINGLE_PERSON_KEYWORDS = [
@@ -64,12 +46,8 @@ const SINGLE_PERSON_KEYWORDS = [
   "pose",
   "posing",
   "profile",
-  "单人",
-  "个人",
-  "肖像",
-  "写真",
-  "头像",
-  "定妆",
+  "arrives",
+  "speaks",
 ];
 
 const HEADSHOT_KEYWORDS = [
@@ -82,12 +60,6 @@ const HEADSHOT_KEYWORDS = [
   "face",
   "facial",
   "media day",
-  "头像",
-  "脸部",
-  "面部",
-  "特写",
-  "肖像",
-  "证件照",
 ];
 
 const HALF_BODY_KEYWORDS = [
@@ -95,20 +67,12 @@ const HALF_BODY_KEYWORDS = [
   "half-body",
   "upper body",
   "upper-body",
-  "upperbody",
   "waist up",
   "torso",
   "posed",
   "posing",
   "presentation",
-  "jersey presentation",
   "media day",
-  "半身",
-  "上半身",
-  "腰部以上",
-  "站姿",
-  "定妆",
-  "宣传照",
 ];
 
 const ACTION_KEYWORDS = [
@@ -117,7 +81,6 @@ const ACTION_KEYWORDS = [
   "action",
   "training",
   "warm-up",
-  "warm up",
   "practice",
   "dribble",
   "shooting",
@@ -131,18 +94,6 @@ const ACTION_KEYWORDS = [
   "dunk",
   "celebration",
   "stadium",
-  "比赛",
-  "赛场",
-  "比赛中",
-  "训练",
-  "热身",
-  "进球",
-  "扣篮",
-  "投篮",
-  "奔跑",
-  "扑救",
-  "击球",
-  "投球",
 ];
 
 function escapeHtml(value) {
@@ -159,7 +110,7 @@ function setBusy(isBusy, message) {
 }
 
 function updateSelectionText() {
-  selectionText.textContent = `已选 ${selectedIds.size} 张`;
+  selectionText.textContent = `Selected ${selectedIds.size}`;
 }
 
 function setAnalysisText(text) {
@@ -167,7 +118,7 @@ function setAnalysisText(text) {
 }
 
 function normalizeHaystack(item) {
-  return ` ${item.title || ""} ${item.reason || ""} ${item.license || ""} `
+  return ` ${item.title || ""} ${item.reason || ""} ${item.caption || ""} ${item.license || ""} `
     .toLowerCase()
     .replace(/\s+/g, " ");
 }
@@ -182,37 +133,19 @@ function classifyOrientation(item) {
 
 function classifyPeopleCountByText(item) {
   const haystack = normalizeHaystack(item);
-
-  if (MULTI_PERSON_KEYWORDS.some((keyword) => haystack.includes(keyword))) {
-    return "multi";
-  }
-
-  if (SINGLE_PERSON_KEYWORDS.some((keyword) => haystack.includes(keyword))) {
-    return "single";
-  }
-
+  if (MULTI_PERSON_KEYWORDS.some((keyword) => haystack.includes(keyword))) return "multi";
+  if (SINGLE_PERSON_KEYWORDS.some((keyword) => haystack.includes(keyword))) return "single";
   return "unknown";
 }
 
 function classifySceneByText(item) {
   const haystack = normalizeHaystack(item);
-
-  if (HEADSHOT_KEYWORDS.some((keyword) => haystack.includes(keyword))) {
-    return "headshot";
-  }
-
-  if (HALF_BODY_KEYWORDS.some((keyword) => haystack.includes(keyword))) {
-    return "halfbody";
-  }
-
-  if (ACTION_KEYWORDS.some((keyword) => haystack.includes(keyword))) {
-    return "action";
-  }
-
+  if (HEADSHOT_KEYWORDS.some((keyword) => haystack.includes(keyword))) return "headshot";
+  if (HALF_BODY_KEYWORDS.some((keyword) => haystack.includes(keyword))) return "halfbody";
+  if (ACTION_KEYWORDS.some((keyword) => haystack.includes(keyword))) return "action";
   if (classifyOrientation(item) === "portrait" && classifyPeopleCountByText(item) !== "multi") {
     return "halfbody";
   }
-
   return "other";
 }
 
@@ -231,23 +164,23 @@ function getSceneType(item) {
 }
 
 function getPeopleCountLabel(type) {
-  if (type === "single") return "单人";
-  if (type === "multi") return "多人";
-  return "未识别";
+  if (type === "single") return "Single";
+  if (type === "multi") return "Multiple";
+  return "Unknown";
 }
 
 function getSceneLabel(type) {
-  if (type === "headshot") return "头像";
-  if (type === "halfbody") return "半身";
-  if (type === "action") return "比赛照";
-  return "其他";
+  if (type === "headshot") return "Headshot";
+  if (type === "halfbody") return "Half body";
+  if (type === "action") return "Match action";
+  return "Other";
 }
 
 function getDetectionSourceLabel(item) {
   const visual = getVisualTags(item);
-  if (!visual) return "文字判断";
-  if (visual.mode === "face-detector") return "图像识别";
-  return "文字判断";
+  if (!visual) return "Text";
+  if (visual.mode === "face-detector") return "Visual";
+  return "Text";
 }
 
 function applyClientFilters() {
@@ -257,15 +190,12 @@ function applyClientFilters() {
   const scene = sceneFilter.value;
 
   visibleResults = allResults.filter((item) => {
-    const haystack = `${item.title} ${item.reason} ${item.license}`.toLowerCase();
+    const haystack = normalizeHaystack(item);
     const matchesKeyword = !keyword || haystack.includes(keyword);
     const matchesOrientation =
       orientation === "all" || classifyOrientation(item) === orientation;
-    const matchesPeople =
-      people === "all" || getPeopleCountType(item) === people;
-    const matchesScene =
-      scene === "all" || getSceneType(item) === scene;
-
+    const matchesPeople = people === "all" || getPeopleCountType(item) === people;
+    const matchesScene = scene === "all" || getSceneType(item) === scene;
     return matchesKeyword && matchesOrientation && matchesPeople && matchesScene;
   });
 
@@ -292,8 +222,8 @@ function syncCheckboxes() {
 
 function renderResults() {
   if (!visibleResults.length) {
-    renderEmpty("这轮结果里没有符合筛选的图片", "换个关键词、放宽条件，或者把人数和高级筛选切回全部再试。");
-    statusText.textContent = `共找到 ${allResults.length} 张，当前显示 0 张。`;
+    renderEmpty("No Getty results match the filters", "Try a broader query or use English player and team names.");
+    statusText.textContent = `Found ${allResults.length}, showing 0.`;
     updateSelectionText();
     return;
   }
@@ -326,28 +256,28 @@ function renderResults() {
       updateSelectionText();
     });
 
-    imageLink.href = item.originalUrl;
+    imageLink.href = item.descriptionUrl;
     image.src = item.previewUrl;
     image.alt = item.title;
 
     title.textContent = item.title;
     dimensions.textContent =
       item.longEdge > 0
-        ? `${item.width} × ${item.height} | 长边 ${item.longEdge}px`
-        : "尺寸信息以原图页为准";
-    reason.textContent = item.reason;
-    peopleMeta.textContent = `人数判断: ${getPeopleCountLabel(getPeopleCountType(item))}`;
-    sceneMeta.textContent = `画面类型: ${getSceneLabel(getSceneType(item))}`;
-    analysisMeta.textContent = `识别方式: ${getDetectionSourceLabel(item)}`;
-    license.textContent = `授权: ${item.license}`;
+        ? `${item.width} x ${item.height} | long edge ${item.longEdge}px`
+        : "Size depends on Getty result";
+    reason.textContent = item.reason || "Getty Images";
+    peopleMeta.textContent = `People: ${getPeopleCountLabel(getPeopleCountType(item))}`;
+    sceneMeta.textContent = `Shot: ${getSceneLabel(getSceneType(item))}`;
+    analysisMeta.textContent = `Analysis: ${getDetectionSourceLabel(item)}`;
+    license.textContent = `Source: ${item.sourceName || "Getty Images"} | ${item.author || "Getty Images"}`;
     detailLink.href = item.descriptionUrl;
 
     copyLinkButton.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(item.originalUrl);
-        statusText.textContent = "原图链接已复制。";
+        await navigator.clipboard.writeText(item.originalUrl || item.descriptionUrl);
+        statusText.textContent = "Link copied.";
       } catch {
-        statusText.textContent = "复制失败，请手动打开原图页复制。";
+        statusText.textContent = "Copy failed. Open the Getty page manually.";
       }
     });
 
@@ -355,7 +285,7 @@ function renderResults() {
   });
 
   resultsGrid.appendChild(fragment);
-  statusText.textContent = `共找到 ${allResults.length} 张，当前显示 ${visibleResults.length} 张。`;
+  statusText.textContent = `Found ${allResults.length}, showing ${visibleResults.length}.`;
   syncCheckboxes();
 }
 
@@ -365,33 +295,26 @@ function loadImage(url) {
     image.crossOrigin = "anonymous";
     image.referrerPolicy = "no-referrer";
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("图片加载失败"));
+    image.onerror = () => reject(new Error("Image failed to load"));
     image.src = url;
   });
 }
 
 function classifySceneFromFaces(faces, imageWidth, imageHeight) {
   if (!faces.length || !imageWidth || !imageHeight) return null;
-
   const faceAreas = faces.map((face) => face.boundingBox.width * face.boundingBox.height);
   const largestFace = Math.max(...faceAreas);
-  const frameArea = imageWidth * imageHeight;
-  const ratio = largestFace / frameArea;
-
+  const ratio = largestFace / (imageWidth * imageHeight);
   if (ratio >= 0.14) return "headshot";
   if (ratio >= 0.045) return "halfbody";
   return "action";
 }
 
 async function analyzeImageVisually(item) {
-  if (!supportsFaceDetection || !faceDetector || !item.previewUrl) {
-    return null;
-  }
-
+  if (!supportsFaceDetection || !faceDetector || !item.previewUrl) return null;
   const image = await loadImage(item.previewUrl);
   const faces = await faceDetector.detect(image);
   const faceCount = faces.length;
-
   let peopleType = "unknown";
   if (faceCount >= 2) peopleType = "multi";
   else if (faceCount === 1) peopleType = "single";
@@ -400,7 +323,9 @@ async function analyzeImageVisually(item) {
     mode: "face-detector",
     faceCount,
     peopleType,
-    sceneType: classifySceneFromFaces(faces, image.naturalWidth, image.naturalHeight) || classifySceneByText(item),
+    sceneType:
+      classifySceneFromFaces(faces, image.naturalWidth, image.naturalHeight) ||
+      classifySceneByText(item),
   };
 }
 
@@ -411,9 +336,7 @@ async function analyzeSingleItem(item) {
   pendingAnalysisIds.add(id);
   try {
     const visual = await analyzeImageVisually(item);
-    if (visual) {
-      visualAnalysisCache.set(id, visual);
-    }
+    if (visual) visualAnalysisCache.set(id, visual);
   } catch {
     visualAnalysisCache.set(id, {
       mode: "text-fallback",
@@ -428,26 +351,33 @@ async function analyzeSingleItem(item) {
 
 async function enhanceVisibleResults() {
   if (!visibleResults.length) {
-    setAnalysisText("等待结果后再做图像识别。");
+    setAnalysisText("Waiting for results.");
     return;
   }
 
   if (!supportsFaceDetection) {
-    setAnalysisText("当前浏览器不支持图像识别，已自动使用文字判断。");
+    setAnalysisText("Visual detection is unavailable. Using text analysis.");
     return;
   }
 
-  const uncached = visibleResults.filter((item) => !visualAnalysisCache.has(String(item.id))).slice(0, 18);
+  const uncached = visibleResults
+    .filter((item) => !visualAnalysisCache.has(String(item.id)))
+    .slice(0, 18);
+
   if (!uncached.length) {
-    const visualCount = visibleResults.filter((item) => getVisualTags(item)?.mode === "face-detector").length;
-    setAnalysisText(`图像识别已完成，本页有 ${visualCount} 张结果使用了看图判断。`);
+    const visualCount = visibleResults.filter(
+      (item) => getVisualTags(item)?.mode === "face-detector"
+    ).length;
+    setAnalysisText(`Visual analysis done for ${visualCount} visible results.`);
     return;
   }
 
-  setAnalysisText(`正在增强识别，本页还有 ${uncached.length} 张图片待分析...`);
+  setAnalysisText(`Analyzing ${uncached.length} visible results...`);
   await Promise.allSettled(uncached.map((item) => analyzeSingleItem(item)));
-  const visualCount = visibleResults.filter((item) => getVisualTags(item)?.mode === "face-detector").length;
-  setAnalysisText(`图像识别已完成，本页有 ${visualCount} 张结果使用了看图判断。`);
+  const visualCount = visibleResults.filter(
+    (item) => getVisualTags(item)?.mode === "face-detector"
+  ).length;
+  setAnalysisText(`Visual analysis done for ${visualCount} visible results.`);
   applyClientFilters();
 }
 
@@ -462,24 +392,17 @@ async function runSearch(event) {
   const limit = formData.get("limit");
 
   selectedIds.clear();
+  visualAnalysisCache.clear();
   updateSelectionText();
-  setBusy(true, "正在查找并筛选高清图片...");
-  setAnalysisText("等待搜索结果...");
+  setBusy(true, "Searching Getty Images...");
+  setAnalysisText("Waiting for results...");
 
   try {
-    const params = new URLSearchParams({
-      q: query,
-      team,
-      sport,
-      minLongEdge,
-      limit,
-    });
+    const params = new URLSearchParams({ q: query, team, sport, minLongEdge, limit });
     const response = await fetch(`/api/search?${params.toString()}`);
     const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || "搜索失败");
-    }
+    if (!response.ok) throw new Error(data.error || "Search failed");
 
     allResults = data.results || [];
     visibleResults = [...allResults];
@@ -489,9 +412,9 @@ async function runSearch(event) {
     sceneFilter.value = "all";
 
     if (!allResults.length) {
-      renderEmpty("没有找到达标结果", "你可以试试只搜人物名，或者换一个球队名后再查。");
-      statusText.textContent = "这次没有找到符合条件的高清图片。";
-      setAnalysisText("没有结果可供识别。");
+      renderEmpty("No qualifying Getty results", "Try English player and team names, or lower the size filter.");
+      statusText.textContent = "No Getty results matched this search.";
+      setAnalysisText("No results to analyze.");
       return;
     }
 
@@ -500,9 +423,9 @@ async function runSearch(event) {
   } catch (error) {
     allResults = [];
     visibleResults = [];
-    renderEmpty("搜索失败", error.message || "稍后再试一次。");
-    statusText.textContent = "搜索失败，请稍后再试。";
-    setAnalysisText("图像识别未开始。");
+    renderEmpty("Search failed", error.message || "Please try again later.");
+    statusText.textContent = "Getty Images search failed.";
+    setAnalysisText("Analysis did not start.");
   } finally {
     setBusy(false);
   }
@@ -511,42 +434,40 @@ async function runSearch(event) {
 async function downloadSelected() {
   const chosen = allResults.filter((item) => selectedIds.has(String(item.id)));
   if (!chosen.length) {
-    statusText.textContent = "请先勾选要下载的图片。";
+    statusText.textContent = "Select results before exporting.";
     return;
   }
 
-  setBusy(true, `正在打包 ${chosen.length} 张图片，请稍等...`);
+  setBusy(true, `Exporting ${chosen.length} Getty results...`);
 
   try {
     const response = await fetch("/api/download", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        bundleName: `${document.getElementById("query").value || "sports-images"}-${Date.now()}`,
+        bundleName: `${document.getElementById("query").value || "getty-images"}-${Date.now()}`,
         items: chosen,
       }),
     });
 
     if (!response.ok) {
       const data = await response.json();
-      throw new Error(data.error || "下载失败");
+      throw new Error(data.error || "Export failed");
     }
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `sports-images-${Date.now()}.zip`;
+    link.download = `getty-images-${Date.now()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
 
-    statusText.textContent = `已开始下载 ${chosen.length} 张图片。`;
+    statusText.textContent = `Exported ${chosen.length} results.`;
   } catch (error) {
-    statusText.textContent = error.message || "打包下载失败。";
+    statusText.textContent = error.message || "Export failed.";
   } finally {
     setBusy(false);
   }
@@ -572,6 +493,6 @@ downloadSelectedButton.addEventListener("click", downloadSelected);
 
 setAnalysisText(
   supportsFaceDetection
-    ? "浏览器支持图像识别，搜索后会自动增强判断。"
-    : "当前浏览器不支持图像识别，将使用文字判断。"
+    ? "Visual analysis available after search."
+    : "Visual analysis unavailable. Text analysis will be used."
 );

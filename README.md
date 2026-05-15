@@ -1,84 +1,67 @@
-# 体育人物高清批量下图工具
+# Getty Sports Image Finder
 
-这是一个可本地运行、也可部署到线上测试的网页工具。它适合按照中文人物名、球队名、运动类型查找体育人物高清图片，并支持二次筛选和批量下载。
+This is a Getty Images only demo for sports image search. It tries to turn Chinese player and team names into better English search phrases, and returns Getty results with a minimum long edge of 1080px.
 
-## 当前能力
+## Features
 
-- 支持中文人名、人物描述、球队名搜索
-- 支持足球、篮球、棒球快速筛选
-- 默认筛选长边 2048px 以上图片
-- 支持单人 / 多人筛选
-- 支持头像 / 半身 / 比赛照高级筛选
-- 支持浏览器图像识别增强判断
-- 支持勾选多张图片并打包下载 ZIP
-- 当前图片来源为 Wikimedia Commons，人物线索来自 Wikidata
+- Getty Images only search
+- 1080px+ minimum size by default
+- Sport filters for football, basketball, and baseball
+- Single / multiple people filters
+- Headshot / half-body / action shot filters
+- Visual analysis fallback when supported by the browser
+- Export selected results as CSV
 
-## 本地启动
+## Required setup
+
+You need a Getty Images API key for online use.
+
+Render environment variable:
+
+```text
+GETTY_API_KEY=your Getty Images API key
+```
+
+Without it, the app will load but search will show a missing-key message.
+
+## Local run
 
 ```bash
+set GETTY_API_KEY=your Getty Images API key
 node server.js
 ```
 
-打开：
+PowerShell:
+
+```powershell
+$env:GETTY_API_KEY="your Getty Images API key"
+node server.js
+```
+
+Open:
 
 ```text
 http://localhost:3000
 ```
 
-## Render 部署
+## Render deploy
 
-1. 把本目录推送到 GitHub 仓库。
-2. 打开 Render，创建 `New Web Service`。
-3. 选择这个 GitHub 仓库。
-4. `Build Command` 留空。
-5. `Start Command` 填：
-
-```bash
-node server.js
-```
-
-6. 部署完成后，Render 会生成一个公网 HTTPS 测试地址。
-
-项目已包含 `render.yaml`，Render 也可以自动识别配置。
-
-## Railway 部署
-
-1. 把本目录推送到 GitHub 仓库。
-2. 打开 Railway，选择 `Deploy from GitHub repo`。
-3. 选择这个仓库。
-4. 启动命令使用：
-
-```bash
-node server.js
-```
-
-项目已包含 `railway.json`，Railway 可以自动读取部署配置。
-
-## 普通服务器部署
-
-在服务器安装 Node.js 20 或更高版本，然后上传项目目录。
-
-```bash
-node server.js
-```
-
-如果需要后台常驻，推荐用 PM2：
-
-```bash
-npm install -g pm2
-pm2 start server.js --name sports-image-batch-tool
-pm2 save
-```
-
-然后用 Nginx 把域名反向代理到：
+1. Push the code to GitHub.
+2. Create a Render Web Service from that repo.
+3. Add this environment variable:
 
 ```text
-http://127.0.0.1:3000
+GETTY_API_KEY
 ```
 
-## 使用建议
+4. Use this start command:
 
-- 最稳的搜索方式是 `中文人名 + 球队名`
-- 如果结果偏少，先只搜人物名，再把球队名留空
-- 如果想更严格，可以把最小长边切到 2560、3000 或 3840
-- 图像识别增强依赖浏览器能力，不支持时会自动退回文字判断
+```bash
+node server.js
+```
+
+5. Deploy the latest commit.
+
+## Note
+
+Getty Images usage, downloads, and licensing are subject to Getty's terms. This demo shows previews and result links, and exports selected result metadata as CSV.

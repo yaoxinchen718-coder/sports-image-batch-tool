@@ -6,3 +6,6 @@ services:
     buildCommand: ""
     startCommand: "node server.js"
     autoDeploy: true
+    envVars:
+      - key: GETTY_API_KEY
+        sync: false
