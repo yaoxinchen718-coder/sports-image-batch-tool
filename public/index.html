@@ -3,24 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Getty Sports Image Finder</title>
+    <title>No-Key Sports Image Finder</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="page-shell">
       <header class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Getty Images Focus</p>
-          <h1>Getty Sports Image Finder</h1>
+          <p class="eyebrow">No API Key Required</p>
+          <h1>Sports Image Batch Finder</h1>
           <p class="hero-text">
-            Search Getty Images editorial sports photos by player, team, and sport. The default minimum long edge is now
-            1080px.
+            Search open sports images by player, team, and sport. This test version focuses on Wikimedia Commons so it
+            can run online without Getty or other paid API keys.
           </p>
         </div>
         <div class="hero-card">
           <div class="hero-stat">
             <span>Source</span>
-            <strong>Getty Images</strong>
+            <strong>Open Images</strong>
           </div>
           <div class="hero-stat">
             <span>Minimum Size</span>
@@ -83,7 +83,7 @@
             </label>
 
             <div class="search-actions">
-              <button type="submit" class="primary-btn">Search Getty</button>
+              <button type="submit" class="primary-btn">Search Open Images</button>
             </div>
           </form>
         </section>
@@ -127,7 +127,7 @@
               <button id="clear-selection" type="button" class="ghost-btn">Clear</button>
             </div>
             <div class="toolbar-block compact">
-              <button id="download-selected" type="button" class="primary-btn">Export selected</button>
+              <button id="download-selected" type="button" class="primary-btn">Download selected</button>
             </div>
           </div>
           <div class="toolbar-summary">
@@ -139,8 +139,8 @@
         <section class="panel results-panel">
           <div id="results-grid" class="results-grid empty">
             <div class="empty-state">
-              <h2>Search Getty Images</h2>
-              <p>Try English player and team names for the best accuracy.</p>
+              <h2>Search open sports images</h2>
+              <p>Try English player and team names for best accuracy. Common Chinese names are translated automatically.</p>
             </div>
           </div>
         </section>
@@ -151,7 +151,7 @@
       <article class="result-card">
         <label class="result-select">
           <input type="checkbox" class="select-checkbox" />
-          <span>Add to export</span>
+          <span>Add to download</span>
         </label>
         <a class="image-link" target="_blank" rel="noreferrer">
           <img class="result-image" alt="" loading="lazy" />
@@ -165,7 +165,7 @@
           <p class="result-meta analysis-meta"></p>
           <p class="result-meta license"></p>
           <div class="result-actions">
-            <a class="ghost-link detail-link" target="_blank" rel="noreferrer">Open Getty page</a>
+            <a class="ghost-link detail-link" target="_blank" rel="noreferrer">Open source page</a>
             <button type="button" class="ghost-link copy-link-btn">Copy image link</button>
           </div>
         </div>

@@ -1,12 +1,14 @@
 const http = require("http");
 const fsp = require("fs/promises");
 const path = require("path");
+const zlib = require("zlib");
 const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, "public");
-const GETTY_API_KEY = process.env.GETTY_API_KEY || "";
-const SEARCH_ENDPOINTS = ["editorial", "creative"];
+const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
+const USER_AGENT =
+  "sports-image-batch-tool/1.0 (no-key demo; Wikimedia Commons image search)";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -17,7 +19,7 @@ const MIME_TYPES = {
 
 const SPORT_TERMS = {
   any: [],
-  football: ["soccer", "football"],
+  football: ["association football", "soccer", "football"],
   basketball: ["basketball", "NBA"],
   baseball: ["baseball", "MLB"],
 };
@@ -29,7 +31,6 @@ const TRANSLATION_HINTS = [
   { tests: [/\u5185\u9a6c\u5c14|neymar/i], value: "Neymar" },
   { tests: [/\u59c6\u5df4\u4f69|mbappe/i], value: "Kylian Mbappe" },
   { tests: [/\u54c8\u5170\u5fb7|haaland/i], value: "Erling Haaland" },
-  { tests: [/\u8a00\u6d6a|\u51fa\u73b0/i], value: "" },
   { tests: [/\u8a79\u59c6\u65af|\u52d2\u5e03\u6717|lebron/i], value: "LeBron James" },
   { tests: [/\u5e93\u91cc|curry/i], value: "Stephen Curry" },
   { tests: [/\u675c\u5170\u7279|durant/i], value: "Kevin Durant" },
@@ -38,17 +39,17 @@ const TRANSLATION_HINTS = [
   { tests: [/\u79d1\u6bd4|kobe/i], value: "Kobe Bryant" },
   { tests: [/\u4e54\u4e39|jordan/i], value: "Michael Jordan" },
   { tests: [/\u5927\u8c37\u7fd4\u5e73|ohtani/i], value: "Shohei Ohtani" },
+  { tests: [/\u8d1d\u514b\u6c49\u59c6|beckham/i], value: "David Beckham" },
   { tests: [/\u6e56\u4eba|lakers/i], value: "Los Angeles Lakers" },
   { tests: [/\u52c7\u58eb|warriors/i], value: "Golden State Warriors" },
   { tests: [/\u51ef\u5c14\u7279\u4eba|celtics/i], value: "Boston Celtics" },
   { tests: [/\u5c3c\u514b\u65af|knicks/i], value: "New York Knicks" },
   { tests: [/\u626c\u57fa|yankees/i], value: "New York Yankees" },
-  { tests: [/\u7ebd\u7ea6\u626c\u57fa|new york yankees/i], value: "New York Yankees" },
   { tests: [/\u9053\u5947|dodgers/i], value: "Los Angeles Dodgers" },
-  { tests: [/\u8d1d\u514b\u6c49\u59c6|beckham/i], value: "David Beckham" },
   { tests: [/\u66fc\u8054|manchester\s*united/i], value: "Manchester United" },
   { tests: [/\u7687\u9a6c|real\s*madrid/i], value: "Real Madrid" },
   { tests: [/\u5df4\u8428|barcelona/i], value: "Barcelona" },
+  { tests: [/\u62dc\u4ec1|bayern/i], value: "Bayern Munich" },
   { tests: [/\u963f\u6839\u5ef7|argentina/i], value: "Argentina" },
   { tests: [/\u6cd5\u56fd|france/i], value: "France" },
   { tests: [/\u8461\u8404\u7259|portugal/i], value: "Portugal" },
@@ -84,7 +85,8 @@ function sanitizeFileName(input, fallback = "image") {
   const safe = cleanText(input)
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .slice(0, 120);
   return safe || fallback;
 }
 
@@ -105,26 +107,8 @@ function uniqueStrings(items, limit = 16) {
   return result;
 }
 
-function extractReferralUrl(value) {
-  if (!value) return "";
-  if (typeof value === "string") {
-    return /^https?:\/\//i.test(value) ? value : "";
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = extractReferralUrl(item);
-      if (found) return found;
-    }
-    return "";
-  }
-  if (typeof value === "object") {
-    if (typeof value.uri === "string" && /^https?:\/\//i.test(value.uri)) return value.uri;
-    for (const entry of Object.values(value)) {
-      const found = extractReferralUrl(entry);
-      if (found) return found;
-    }
-  }
-  return "";
+function getMeta(meta = {}, key) {
+  return cleanText(meta?.[key]?.value || "");
 }
 
 function translateHints(text) {
@@ -133,38 +117,40 @@ function translateHints(text) {
 
   for (const hint of TRANSLATION_HINTS) {
     if (hint.tests.some((pattern) => pattern.test(value))) {
-      if (hint.value) hints.push(hint.value);
+      hints.push(hint.value);
     }
   }
 
   return uniqueStrings([value, ...hints], 8);
 }
 
-function buildGettyPhrases({ query, team, sport }) {
+function buildSearchPhrases({ query, team, sport }) {
   const queryHints = translateHints(query);
   const teamHints = translateHints(team);
   const sportTerms = SPORT_TERMS[sport] || [];
-  const primaryQuery = queryHints[1] || queryHints[0] || query;
-  const primaryTeam = teamHints[1] || teamHints[0] || team;
+  const primaryQuery = queryHints.find((value) => /[a-z]/i.test(value)) || queryHints[0] || query;
+  const primaryTeam = teamHints.find((value) => /[a-z]/i.test(value)) || teamHints[0] || team;
 
   return uniqueStrings(
     [
       `${primaryQuery} ${primaryTeam}`.trim(),
       `${primaryQuery} ${sportTerms[0] || ""}`.trim(),
-      `${primaryQuery}`.trim(),
+      `${primaryQuery} portrait`.trim(),
+      `${primaryQuery} jersey`.trim(),
+      `${primaryQuery} match`.trim(),
       `${query} ${team}`.trim(),
-      ...queryHints,
       ...teamHints.map((value) => `${primaryQuery} ${value}`.trim()),
       ...sportTerms.map((term) => `${primaryQuery} ${term}`.trim()),
+      ...queryHints,
     ],
-    8
+    10
   );
 }
 
-async function fetchGettyJson(url) {
+async function fetchJson(url) {
   const response = await fetch(url, {
     headers: {
-      "Api-Key": GETTY_API_KEY,
+      "User-Agent": USER_AGENT,
       Accept: "application/json",
     },
     signal: AbortSignal.timeout(20000),
@@ -179,165 +165,136 @@ async function fetchGettyJson(url) {
   }
 
   if (!response.ok) {
-    const message =
-      body?.ErrorMessage ||
-      body?.message ||
-      body?.error_description ||
-      `Getty API request failed: ${response.status}`;
-    throw new Error(message);
+    throw new Error(body?.error?.info || body?.message || `Request failed: ${response.status}`);
   }
 
   return body;
 }
 
-function pickBestSize(sizes = []) {
-  return [...sizes]
-    .filter((size) => size?.uri)
-    .sort((a, b) => (Number(b.width) || 0) - (Number(a.width) || 0))[0];
+async function searchCommonsPhrase(phrase, pageSize) {
+  const url = new URL(COMMONS_API);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("generator", "search");
+  url.searchParams.set("gsrsearch", phrase);
+  url.searchParams.set("gsrnamespace", "6");
+  url.searchParams.set("gsrlimit", String(pageSize));
+  url.searchParams.set("prop", "imageinfo");
+  url.searchParams.set("iiprop", "url|size|mime|extmetadata");
+  url.searchParams.set("iiurlwidth", "1200");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("formatversion", "2");
+  url.searchParams.set("origin", "*");
+
+  const data = await fetchJson(url.toString());
+  return Array.isArray(data?.query?.pages) ? data.query.pages : [];
 }
 
-function normalizeGettyImage(image, source) {
-  const displaySizes = Array.isArray(image.display_sizes) ? image.display_sizes : [];
-  const display = pickBestSize(displaySizes);
-  const fallbackUri = image.preview || image.comp || image.thumb || "";
-  const maxDimensions = image.max_dimensions || {};
-  const largest = pickBestSize([
-    ...displaySizes,
-    image.preview ? { uri: image.preview, width: 612, height: 0 } : null,
-    image.comp ? { uri: image.comp, width: 1024, height: 0 } : null,
-    image.thumb ? { uri: image.thumb, width: 170, height: 0 } : null,
-  ].filter(Boolean));
+function normalizeCommonsPage(page, phrase) {
+  const imageInfo = Array.isArray(page.imageinfo) ? page.imageinfo[0] : null;
+  if (!imageInfo?.url) return null;
 
-  const width = Number(maxDimensions.width || largest?.width || display?.width || 0);
-  const height = Number(maxDimensions.height || largest?.height || display?.height || 0);
-  const title = cleanText(image.title || image.caption || image.id || "Getty result");
-  const caption = cleanText(image.caption || "");
-  const date = cleanText(image.date_created || image.date_submitted || "");
-  const location = cleanText([image.city, image.state_province, image.country].filter(Boolean).join(", "));
-  const referralUrl = extractReferralUrl(image.referral_destinations);
-  const searchFallback = `https://www.gettyimages.com/search/2/image?phrase=${encodeURIComponent(title)}`;
+  const meta = imageInfo.extmetadata || {};
+  const title = cleanText(page.title || getMeta(meta, "ObjectName") || "Commons image");
+  const readableTitle = title.replace(/^File:/i, "").replace(/\.[a-z0-9]+$/i, "");
+  const description = getMeta(meta, "ImageDescription");
+  const categories = getMeta(meta, "Categories");
+  const date = getMeta(meta, "DateTimeOriginal") || getMeta(meta, "DateTime");
+  const author = getMeta(meta, "Artist") || getMeta(meta, "Credit") || "Wikimedia Commons";
+  const license =
+    getMeta(meta, "LicenseShortName") || getMeta(meta, "UsageTerms") || "Open license";
+  const width = Number(imageInfo.width || 0);
+  const height = Number(imageInfo.height || 0);
+  const sourceId = String(page.pageid || page.title || imageInfo.url);
+  const ext = path.extname(new URL(imageInfo.url).pathname).replace(".", "").toLowerCase() || "jpg";
 
   return {
-    id: String(image.id),
+    id: `commons-${sourceId}`,
     pageTitle: title,
-    title,
+    title: readableTitle,
     width,
     height,
     longEdge: Math.max(width, height),
     shortEdge: Math.min(width, height),
     area: width * height,
-    mime: "image/jpeg",
-    ext: "jpg",
-    previewUrl: display?.uri || fallbackUri,
-    originalUrl: display?.uri || fallbackUri,
-    descriptionUrl: referralUrl || searchFallback,
-    license: cleanText(image.license_model || "Getty Images"),
-    author: cleanText(image.artist || image.credit_line || "Getty Images"),
-    credit: cleanText(image.credit_line || ""),
-    sourceName: source,
-    reason: [image.collection_name, date, location].filter(Boolean).join(" | ") || source,
-    caption,
-    qualityRank: Number(image.quality_rank ?? 99),
-    orientation: cleanText(image.orientation || ""),
-    assetFamily: cleanText(image.asset_family || ""),
+    mime: imageInfo.mime || "image/jpeg",
+    ext,
+    previewUrl: imageInfo.thumburl || imageInfo.url,
+    originalUrl: imageInfo.url,
+    descriptionUrl: imageInfo.descriptionurl || imageInfo.descriptionshorturl || imageInfo.url,
+    license,
+    author,
+    credit: getMeta(meta, "Credit"),
+    sourceName: "Wikimedia Commons",
+    reason: [date, categories].filter(Boolean).join(" | ") || phrase,
+    caption: description,
+    phrase,
   };
 }
 
-function scoreGettyResult(item, phrase, endpoint, query, team) {
+function scoreResult(item, phrase, query, team, sport) {
   const haystack = `${item.title} ${item.caption} ${item.reason}`.toLowerCase();
+  const queryHints = translateHints(query).map((value) => value.toLowerCase());
+  const teamHints = translateHints(team).map((value) => value.toLowerCase());
+  const sportTerms = (SPORT_TERMS[sport] || []).map((value) => value.toLowerCase());
   let score = 0;
 
-  if (cleanText(query) && haystack.includes(cleanText(query).toLowerCase())) score += 25;
-  if (cleanText(team) && haystack.includes(cleanText(team).toLowerCase())) score += 14;
-  if (cleanText(phrase) && haystack.includes(cleanText(phrase).toLowerCase())) score += 12;
-  if (endpoint === "editorial") score += 10;
-  if (item.assetFamily === "editorial") score += 8;
-  score += Math.max(0, 30 - item.qualityRank * 8);
-  score += Math.min(item.longEdge / 120, 30);
-  score += Math.min(item.area / 500000, 20);
+  for (const hint of queryHints) {
+    if (hint && haystack.includes(hint)) score += /[a-z]/i.test(hint) ? 35 : 16;
+  }
+
+  for (const hint of teamHints) {
+    if (hint && haystack.includes(hint)) score += /[a-z]/i.test(hint) ? 18 : 8;
+  }
+
+  for (const term of sportTerms) {
+    if (term && haystack.includes(term)) score += 8;
+  }
+
+  if (phrase && haystack.includes(phrase.toLowerCase())) score += 10;
+  if (/portrait|headshot|media day|profile/i.test(haystack)) score += 12;
+  if (/team photo|group|lineup|squad/i.test(haystack)) score -= 10;
+  if (/logo|svg|icon|flag|map|diagram/i.test(haystack)) score -= 40;
+  score += Math.min(item.longEdge / 120, 35);
+  score += Math.min(item.area / 500000, 25);
   return score;
 }
 
-async function searchGettyEndpoint(endpoint, phrase, pageSize = 25) {
-  const url = new URL(`https://api.gettyimages.com/v3/search/images/${endpoint}`);
-  url.searchParams.set("phrase", phrase);
-  url.searchParams.set("page_size", String(pageSize));
-  url.searchParams.set("sort_order", "best_match");
-  url.searchParams.set("fields", "detail_set,display_set");
+async function searchImages({ query, team, sport, minLongEdge, limit }) {
+  const phrases = buildSearchPhrases({ query, team, sport });
+  const rawPages = [];
 
-  const data = await fetchGettyJson(url.toString());
-  return Array.isArray(data.images) ? data.images : [];
-}
-
-async function searchGettyImages({ query, team, sport, minLongEdge, limit }) {
-  if (!GETTY_API_KEY) {
-    const error = new Error(
-      "Missing GETTY_API_KEY. Add it to the Render environment variables and redeploy."
-    );
-    error.code = "MISSING_GETTY_API_KEY";
-    throw error;
-  }
-
-  const phrases = buildGettyPhrases({ query, team, sport });
-  const endpointOrder = ["editorial", "creative"];
-  const rawImages = [];
-
-  for (const endpoint of endpointOrder) {
-    for (const phrase of phrases.slice(0, 5)) {
-      try {
-        const images = await searchGettyEndpoint(endpoint, phrase, Math.min(limit * 2, 50));
-        for (const image of images) {
-          rawImages.push({ image, endpoint, phrase });
-        }
-      } catch (error) {
-        rawImages.push({
-          image: {
-            id: `${endpoint}-${phrase}`,
-            title: phrase,
-            caption: error.message,
-            display_sizes: [],
-            max_dimensions: { width: 0, height: 0 },
-          },
-          endpoint,
-          phrase,
-          error: error.message,
-        });
-      }
+  for (const phrase of phrases.slice(0, 8)) {
+    try {
+      const pages = await searchCommonsPhrase(phrase, Math.min(30, Math.max(12, limit)));
+      for (const page of pages) rawPages.push({ page, phrase });
+    } catch {
+      // Keep searching with the next phrase if Commons rejects or times out.
     }
   }
 
   const byId = new Map();
-  for (const entry of rawImages) {
-    const item = normalizeGettyImage(entry.image, entry.endpoint);
-    if (!item.id) continue;
+  for (const entry of rawPages) {
+    const item = normalizeCommonsPage(entry.page, entry.phrase);
+    if (!item) continue;
+    if (!/^image\//i.test(item.mime)) continue;
     if (item.longEdge > 0 && item.longEdge < minLongEdge) continue;
+    const score = scoreResult(item, entry.phrase, query, team, sport);
     const existing = byId.get(item.id);
-    if (!existing) {
-      byId.set(item.id, {
-        ...item,
-        score: scoreGettyResult(item, entry.phrase, entry.endpoint, query, team),
-      });
-      continue;
-    }
-
-    const candidateScore = scoreGettyResult(item, entry.phrase, entry.endpoint, query, team);
-    if (candidateScore > existing.score) {
-      byId.set(item.id, { ...item, score: candidateScore });
-    }
+    if (!existing || score > existing.score) byId.set(item.id, { ...item, score });
   }
 
   const results = [...byId.values()]
-    .sort((a, b) => b.score - a.score || b.longEdge - a.longEdge || a.qualityRank - b.qualityRank)
+    .sort((a, b) => b.score - a.score || b.longEdge - a.longEdge || b.area - a.area)
     .slice(0, limit);
 
   return {
     results,
     debug: {
-      source: "Getty Images",
+      source: "Wikimedia Commons",
       phrases,
-      endpoints: endpointOrder,
       minLongEdge,
       total: results.length,
+      noApiKeyRequired: true,
     },
   };
 }
@@ -349,6 +306,94 @@ async function readBody(req) {
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+async function getRemoteBuffer(url) {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+    },
+    signal: AbortSignal.timeout(25000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Download failed: ${response.status}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function crc32(buffer) {
+  let crc = -1;
+  for (let index = 0; index < buffer.length; index += 1) {
+    crc ^= buffer[index];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+function dosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  const dosTime =
+    (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return { dosTime, dosDate };
+}
+
+function createZip(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const { dosTime, dosDate } = dosDateTime();
+
+  for (const entry of entries) {
+    const nameBuffer = Buffer.from(entry.name, "utf8");
+    const compressed = zlib.deflateRawSync(entry.data);
+    const checksum = crc32(entry.data);
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0x0800, 6);
+    localHeader.writeUInt16LE(8, 8);
+    localHeader.writeUInt16LE(dosTime, 10);
+    localHeader.writeUInt16LE(dosDate, 12);
+    localHeader.writeUInt32LE(checksum, 14);
+    localHeader.writeUInt32LE(compressed.length, 18);
+    localHeader.writeUInt32LE(entry.data.length, 22);
+    localHeader.writeUInt16LE(nameBuffer.length, 26);
+
+    localParts.push(localHeader, nameBuffer, compressed);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0x0800, 8);
+    centralHeader.writeUInt16LE(8, 10);
+    centralHeader.writeUInt16LE(dosTime, 12);
+    centralHeader.writeUInt16LE(dosDate, 14);
+    centralHeader.writeUInt32LE(checksum, 16);
+    centralHeader.writeUInt32LE(compressed.length, 20);
+    centralHeader.writeUInt32LE(entry.data.length, 24);
+    centralHeader.writeUInt16LE(nameBuffer.length, 28);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, nameBuffer);
+
+    offset += localHeader.length + nameBuffer.length + compressed.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const endRecord = Buffer.alloc(22);
+  endRecord.writeUInt32LE(0x06054b50, 0);
+  endRecord.writeUInt16LE(entries.length, 8);
+  endRecord.writeUInt16LE(entries.length, 10);
+  endRecord.writeUInt32LE(centralDirectory.length, 12);
+  endRecord.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...localParts, centralDirectory, endRecord]);
 }
 
 async function handleSearch(req, res, requestUrl) {
@@ -366,14 +411,7 @@ async function handleSearch(req, res, requestUrl) {
   }
 
   try {
-    const payload = await searchGettyImages({
-      query,
-      team,
-      sport,
-      minLongEdge,
-      limit,
-    });
-
+    const payload = await searchImages({ query, team, sport, minLongEdge, limit });
     sendJson(res, 200, {
       query,
       team,
@@ -383,10 +421,10 @@ async function handleSearch(req, res, requestUrl) {
       ...payload,
     });
   } catch (error) {
-    sendJson(res, error.code === "MISSING_GETTY_API_KEY" ? 400 : 500, {
-      error: error.message || "Getty Images search failed.",
+    sendJson(res, 500, {
+      error: error.message || "Image search failed.",
       detail: error.message,
-      source: "Getty Images",
+      source: "Wikimedia Commons",
     });
   }
 }
@@ -395,40 +433,65 @@ async function handleDownload(req, res) {
   try {
     const rawBody = await readBody(req);
     const body = JSON.parse(rawBody || "{}");
-    const items = Array.isArray(body.items) ? body.items.slice(0, 80) : [];
+    const items = Array.isArray(body.items) ? body.items.slice(0, 40) : [];
 
     if (!items.length) {
-      return sendJson(res, 400, { error: "Select items before exporting." });
+      return sendJson(res, 400, { error: "Select items before downloading." });
     }
 
-    const rows = [
-      ["Index", "Getty ID", "Title", "Size", "Getty URL", "Detail URL", "Source"].join(","),
-      ...items.map((item, index) =>
-        [
-          index + 1,
-          item.id,
-          `"${String(item.title || "").replace(/"/g, '""')}"`,
-          `${item.width || 0}x${item.height || 0}`,
-          item.originalUrl || "",
-          item.descriptionUrl || "",
-          "Getty Images",
-        ].join(",")
-      ),
+    const entries = [];
+    const manifestRows = [
+      ["Index", "File", "Title", "Size", "Source", "License", "Author", "Original URL", "Detail URL"].join(","),
     ];
 
-    const csv = `\uFEFF${rows.join("\n")}`;
-    const fileName = `${sanitizeFileName(body.bundleName || "getty-images-results")}.csv`;
+    for (const [index, item] of items.entries()) {
+      try {
+        const url = item.originalUrl || item.previewUrl;
+        if (!url || !/^https?:\/\//i.test(url)) continue;
+        const data = await getRemoteBuffer(url);
+        const ext = sanitizeFileName(item.ext || path.extname(new URL(url).pathname).replace(".", "") || "jpg");
+        const name = `${String(index + 1).padStart(2, "0")}-${sanitizeFileName(item.title, "sports-image")}.${ext}`;
+        entries.push({ name, data });
+        manifestRows.push(
+          [
+            index + 1,
+            `"${name.replace(/"/g, '""')}"`,
+            `"${String(item.title || "").replace(/"/g, '""')}"`,
+            `${item.width || 0}x${item.height || 0}`,
+            `"${String(item.sourceName || "").replace(/"/g, '""')}"`,
+            `"${String(item.license || "").replace(/"/g, '""')}"`,
+            `"${String(item.author || "").replace(/"/g, '""')}"`,
+            item.originalUrl || "",
+            item.descriptionUrl || "",
+          ].join(",")
+        );
+      } catch {
+        // Skip individual files that fail, and still return the rest.
+      }
+    }
+
+    if (!entries.length) {
+      return sendJson(res, 502, { error: "No selected images could be downloaded." });
+    }
+
+    entries.push({
+      name: "image-sources.csv",
+      data: Buffer.from(`\uFEFF${manifestRows.join("\n")}`, "utf8"),
+    });
+
+    const zip = createZip(entries);
+    const fileName = `${sanitizeFileName(body.bundleName || "sports-images")}.zip`;
 
     res.writeHead(200, {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-      "Content-Length": Buffer.byteLength(csv),
+      "Content-Length": zip.length,
       "Cache-Control": "no-store",
     });
-    res.end(csv);
+    res.end(zip);
   } catch (error) {
     sendJson(res, 500, {
-      error: "Export failed.",
+      error: "Download failed.",
       detail: error.message,
     });
   }
@@ -493,5 +556,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Getty-only image search tool running on http://localhost:${PORT}`);
+  console.log(`No-key sports image search tool running on http://localhost:${PORT}`);
 });

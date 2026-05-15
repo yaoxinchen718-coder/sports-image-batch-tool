@@ -222,7 +222,7 @@ function syncCheckboxes() {
 
 function renderResults() {
   if (!visibleResults.length) {
-    renderEmpty("No Getty results match the filters", "Try a broader query or use English player and team names.");
+    renderEmpty("No open-image results match the filters", "Try a broader query, a lower size filter, or English player and team names.");
     statusText.textContent = `Found ${allResults.length}, showing 0.`;
     updateSelectionText();
     return;
@@ -264,12 +264,12 @@ function renderResults() {
     dimensions.textContent =
       item.longEdge > 0
         ? `${item.width} x ${item.height} | long edge ${item.longEdge}px`
-        : "Size depends on Getty result";
-    reason.textContent = item.reason || "Getty Images";
+        : "Size depends on source result";
+    reason.textContent = item.reason || item.sourceName || "Open image source";
     peopleMeta.textContent = `People: ${getPeopleCountLabel(getPeopleCountType(item))}`;
     sceneMeta.textContent = `Shot: ${getSceneLabel(getSceneType(item))}`;
     analysisMeta.textContent = `Analysis: ${getDetectionSourceLabel(item)}`;
-    license.textContent = `Source: ${item.sourceName || "Getty Images"} | ${item.author || "Getty Images"}`;
+    license.textContent = `Source: ${item.sourceName || "Open image source"} | ${item.license || "Check license"} | ${item.author || "Unknown author"}`;
     detailLink.href = item.descriptionUrl;
 
     copyLinkButton.addEventListener("click", async () => {
@@ -277,7 +277,7 @@ function renderResults() {
         await navigator.clipboard.writeText(item.originalUrl || item.descriptionUrl);
         statusText.textContent = "Link copied.";
       } catch {
-        statusText.textContent = "Copy failed. Open the Getty page manually.";
+        statusText.textContent = "Copy failed. Open the source page manually.";
       }
     });
 
@@ -394,7 +394,7 @@ async function runSearch(event) {
   selectedIds.clear();
   visualAnalysisCache.clear();
   updateSelectionText();
-  setBusy(true, "Searching Getty Images...");
+  setBusy(true, "Searching open image sources...");
   setAnalysisText("Waiting for results...");
 
   try {
@@ -412,8 +412,8 @@ async function runSearch(event) {
     sceneFilter.value = "all";
 
     if (!allResults.length) {
-      renderEmpty("No qualifying Getty results", "Try English player and team names, or lower the size filter.");
-      statusText.textContent = "No Getty results matched this search.";
+      renderEmpty("No qualifying open images", "Try English player and team names, or lower the size filter.");
+      statusText.textContent = "No open-image results matched this search.";
       setAnalysisText("No results to analyze.");
       return;
     }
@@ -424,7 +424,7 @@ async function runSearch(event) {
     allResults = [];
     visibleResults = [];
     renderEmpty("Search failed", error.message || "Please try again later.");
-    statusText.textContent = "Getty Images search failed.";
+    statusText.textContent = "Open image search failed.";
     setAnalysisText("Analysis did not start.");
   } finally {
     setBusy(false);
@@ -438,14 +438,14 @@ async function downloadSelected() {
     return;
   }
 
-  setBusy(true, `Exporting ${chosen.length} Getty results...`);
+  setBusy(true, `Downloading ${chosen.length} selected images...`);
 
   try {
     const response = await fetch("/api/download", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        bundleName: `${document.getElementById("query").value || "getty-images"}-${Date.now()}`,
+        bundleName: `${document.getElementById("query").value || "sports-images"}-${Date.now()}`,
         items: chosen,
       }),
     });
@@ -459,13 +459,13 @@ async function downloadSelected() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `getty-images-${Date.now()}.csv`;
+    link.download = `sports-images-${Date.now()}.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
 
-    statusText.textContent = `Exported ${chosen.length} results.`;
+    statusText.textContent = `Started downloading ${chosen.length} selected images.`;
   } catch (error) {
     statusText.textContent = error.message || "Export failed.";
   } finally {
